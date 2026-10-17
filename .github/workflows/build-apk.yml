@@ -1,1 +1,81 @@
 
+name: Build Midnight Chess APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "midnight-chess.zip"
+      - ".github/workflows/build-apk.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download project
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Extract project
+        run: |
+          mkdir -p source
+          unzip -q midnight-chess.zip -d source
+          test -f source/midnight-chess/package.json
+
+      - name: Install dependencies and Capacitor
+        working-directory: source/midnight-chess
+        run: |
+          npm install
+          npm install @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7
+
+      - name: Configure Android app
+        working-directory: source/midnight-chess
+        run: |
+          cat > capacitor.config.json <<'EOF'
+          {
+            "appId": "com.midnightchess.app",
+            "appName": "Midnight Chess",
+            "webDir": "dist"
+          }
+          EOF
+
+      - name: Build web app
+        working-directory: source/midnight-chess
+        run: npm run build
+
+      - name: Create Android project
+        working-directory: source/midnight-chess
+        run: npx cap add android
+
+      - name: Sync Android project
+        working-directory: source/midnight-chess
+        run: npx cap sync android
+
+      - name: Build APK
+        working-directory: source/midnight-chess
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Midnight-Chess-APK
+          path: source/midnight-chess/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          
